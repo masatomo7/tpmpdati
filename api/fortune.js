@@ -1,21 +1,53 @@
-aexport default async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const { prompt, capturedImage } = req.body;
+
+    // OpenAI用のメッセージ形式
+    const openaiMessages = [];
+
+    if (capturedImage) {
+      openaiMessages.push({
+        role: "user",
+        content: [
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${capturedImage}` }
+          },
+          { type: "text", text: prompt }
+        ]
+      });
+    } else {
+      openaiMessages.push({
+        role: "user",
+        content: prompt
+      });
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify({
+        model: "gpt-4o",
+        max_tokens: 1000,
+        messages: openaiMessages,
+      }),
     });
 
     const data = await response.json();
-    res.status(200).json(data);
+
+    // フロントと同じ形式で返す
+    const text = data.choices?.[0]?.message?.content || '鑑定結果を取得できませんでした。';
+    res.status(200).json({
+      content: [{ type: 'text', text }]
+    });
+
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
