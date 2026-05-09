@@ -6,7 +6,6 @@ export default async function handler(req, res) {
   try {
     const { prompt, capturedImage } = req.body;
 
-    // OpenAI用のメッセージ形式
     const openaiMessages = [];
 
     if (capturedImage) {
@@ -41,8 +40,6 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
-
-    // フロントと同じ形式で返す
     const text = data.choices?.[0]?.message?.content || '鑑定結果を取得できませんでした。';
     res.status(200).json({
       content: [{ type: 'text', text }]
