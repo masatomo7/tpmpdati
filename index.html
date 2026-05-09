@@ -1,51 +1,419 @@
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>四柱推命 AI鑑定</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    background: #fafaf8;
+    color: #1a1a18;
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+  }
+  .container { max-width: 560px; margin: 0 auto; }
+
+  /* Header */
+  .header { text-align: center; margin-bottom: 2rem; }
+  .header h1 { font-size: 22px; font-weight: 500; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .header p { font-size: 14px; color: #6b6b64; }
+
+  /* Form */
+  .card {
+    background: #fff;
+    border: 0.5px solid #e0dfd6;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-title { font-size: 13px; font-weight: 500; color: #6b6b64; margin-bottom: 12px; letter-spacing: 0.04em; }
+
+  .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; color: #6b6b64; }
+  input[type="number"], select, input[type="text"] {
+    width: 100%;
+    padding: 9px 12px;
+    font-size: 15px;
+    font-family: inherit;
+    border: 0.5px solid #d0cfc6;
+    border-radius: 8px;
+    background: #fff;
+    color: #1a1a18;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  input:focus, select:focus { outline: none; border-color: #888780; }
+
+  .toggle-group { display: flex; gap: 8px; }
+  .toggle-btn {
+    flex: 1;
+    padding: 9px 6px;
+    font-size: 14px;
+    font-family: inherit;
+    border: 0.5px solid #d0cfc6;
+    border-radius: 8px;
+    background: #fff;
+    color: #6b6b64;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .toggle-btn.active {
+    border-color: #888780;
+    background: #f1efe8;
+    color: #1a1a18;
+    font-weight: 500;
   }
 
-  try {
-    const { prompt, capturedImage } = req.body;
+  /* Camera */
+  .optional-label { font-size: 11px; background: #f1efe8; border: 0.5px solid #d0cfc6; border-radius: 4px; padding: 1px 6px; color: #6b6b64; margin-left: 6px; }
+  .camera-video { width: 100%; border-radius: 8px; display: block; background: #f1efe8; }
+  .cam-btns { display: flex; gap: 8px; margin-top: 10px; }
+  .cam-btn {
+    flex: 1;
+    padding: 9px;
+    font-size: 13px;
+    font-family: inherit;
+    border: 0.5px solid #d0cfc6;
+    border-radius: 8px;
+    background: #fff;
+    color: #1a1a18;
+    cursor: pointer;
+  }
+  .cam-btn:hover { background: #f1efe8; }
+  .face-preview { width: 100%; border-radius: 8px; display: none; }
+  .face-ok { font-size: 13px; color: #3b6d11; margin-top: 8px; display: none; }
 
-    const openaiMessages = [];
+  /* Elements */
+  .el-tag { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-top: 3px; }
+  .el-wood { background: #EAF3DE; color: #3B6D11; }
+  .el-fire { background: #FCEBEB; color: #A32D2D; }
+  .el-earth { background: #FAEEDA; color: #854F0B; }
+  .el-metal { background: #F1EFE8; color: #5F5E5A; }
+  .el-water { background: #E6F1FB; color: #185FA5; }
 
-    if (capturedImage) {
-      openaiMessages.push({
-        role: "user",
-        content: [
-          {
-            type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${capturedImage}` }
-          },
-          { type: "text", text: prompt }
-        ]
-      });
-    } else {
-      openaiMessages.push({
-        role: "user",
-        content: prompt
-      });
-    }
+  /* Pillars */
+  .pillars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+  .pillar {
+    background: #f1efe8;
+    border: 0.5px solid #d0cfc6;
+    border-radius: 8px;
+    padding: 10px 6px;
+    text-align: center;
+  }
+  .pillar-label { font-size: 10px; color: #6b6b64; margin-bottom: 6px; letter-spacing: 0.04em; }
+  .pillar-kan { font-size: 20px; font-weight: 500; line-height: 1; }
+  .pillar-chi { font-size: 17px; font-weight: 500; margin-top: 6px; line-height: 1; }
+  .pillar-divider { border: none; border-top: 0.5px solid #d0cfc6; margin: 6px 0; }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        max_tokens: 1000,
-        messages: openaiMessages,
-      }),
-    });
+  /* Submit */
+  .submit-btn {
+    width: 100%;
+    padding: 14px;
+    font-size: 15px;
+    font-family: inherit;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    border: 0.5px solid #888780;
+    border-radius: 10px;
+    background: #fff;
+    color: #1a1a18;
+    cursor: pointer;
+    margin-bottom: 16px;
+    transition: all 0.15s;
+  }
+  .submit-btn:hover { background: #f1efe8; }
+  .submit-btn:active { transform: scale(0.98); }
+  .submit-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
-    const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || '鑑定結果を取得できませんでした。';
-    res.status(200).json({
-      content: [{ type: 'text', text }]
-    });
+  /* Result */
+  .result-card { display: none; }
+  .result-label { font-size: 13px; font-weight: 500; color: #6b6b64; margin-bottom: 10px; letter-spacing: 0.04em; }
+  .result-text { font-size: 16px; line-height: 1.85; color: #1a1a18; white-space: pre-wrap; }
 
-  } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+  /* Loading */
+  .dots { display: inline-flex; gap: 5px; align-items: center; }
+  .dots span { width: 6px; height: 6px; border-radius: 50%; background: #888780; animation: ld 1.2s infinite; }
+  .dots span:nth-child(2) { animation-delay: .2s; }
+  .dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes ld { 0%,80%,100%{opacity:.25;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
+
+  /* Theme input */
+  input[type="text"].theme-input { margin-bottom: 0; }
+
+  /* Footer */
+  .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #aaa; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>四柱推命 AI鑑定</h1>
+    <p>生年月日・血液型・顔印象から運命を読み解きます</p>
+  </div>
+
+  <!-- 生年月日 -->
+  <div class="card">
+    <p class="card-title">生年月日</p>
+    <div class="row">
+      <div class="field">
+        <label for="f-year">生年</label>
+        <input type="number" id="f-year" placeholder="1990" min="1900" max="2010">
+      </div>
+      <div class="field">
+        <label for="f-month">月</label>
+        <select id="f-month">
+          <option value="">選択</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option>
+          <option>5</option><option>6</option><option>7</option><option>8</option>
+          <option>9</option><option>10</option><option>11</option><option>12</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-day">日</label>
+        <select id="f-day"><option value="">選択</option></select>
+      </div>
+    </div>
+
+    <p class="card-title">性別</p>
+    <div class="toggle-group" style="margin-bottom:16px">
+      <button class="toggle-btn active" id="g-male" onclick="selGender('male')">男性</button>
+      <button class="toggle-btn" id="g-female" onclick="selGender('female')">女性</button>
+    </div>
+
+    <p class="card-title">血液型</p>
+    <div class="toggle-group" style="margin-bottom:16px">
+      <button class="toggle-btn" id="bl-A" onclick="selBlood('A')">A型</button>
+      <button class="toggle-btn" id="bl-B" onclick="selBlood('B')">B型</button>
+      <button class="toggle-btn" id="bl-O" onclick="selBlood('O')">O型</button>
+      <button class="toggle-btn" id="bl-AB" onclick="selBlood('AB')">AB型</button>
+    </div>
+
+    <p class="card-title">鑑定テーマ <span class="optional-label">任意</span></p>
+    <input type="text" class="theme-input" id="f-theme" placeholder="例：恋愛運、2026年の運勢">
+  </div>
+
+  <!-- 顔写真 -->
+  <div class="card">
+    <p class="card-title">顔写真で印象鑑定 <span class="optional-label">任意</span></p>
+    <div id="cam-area" style="display:none">
+      <video id="video-el" class="camera-video" autoplay playsinline></video>
+    </div>
+    <canvas id="canvas-el" style="display:none"></canvas>
+    <img id="face-preview" class="face-preview" alt="撮影した顔写真">
+    <p class="face-ok" id="face-ok">✓ 顔写真を取得しました。鑑定に反映されます。</p>
+    <div class="cam-btns">
+      <button class="cam-btn" id="btn-open" onclick="openCamera()">📷 カメラを起動</button>
+      <button class="cam-btn" id="btn-snap" onclick="takePhoto()" style="display:none">撮影</button>
+      <button class="cam-btn" id="btn-retake" onclick="retake()" style="display:none">撮り直し</button>
+    </div>
+  </div>
+
+  <!-- 鑑定ボタン -->
+  <button class="submit-btn" id="submit-btn" onclick="doFortune()">命式を鑑定する</button>
+
+  <!-- 命式 -->
+  <div id="pillars-area" style="display:none">
+    <div class="card">
+      <p class="card-title">命式</p>
+      <div class="pillars" id="pillars-grid"></div>
+    </div>
+  </div>
+
+  <!-- 結果 -->
+  <div class="card result-card" id="result-card">
+    <p class="result-label">AI鑑定結果</p>
+    <div class="result-text" id="result-text"></div>
+  </div>
+
+  <div class="footer">Powered by Claude AI</div>
+</div>
+
+<script>
+const JIKKAN = ["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"];
+const JUNISHI = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
+const JIKKAN_EL = ["木","木","火","火","土","土","金","金","水","水"];
+const JUNISHI_EL = ["水","土","木","木","土","火","火","土","金","金","土","水"];
+const EL_CLASS = {木:"el-wood",火:"el-fire",土:"el-earth",金:"el-metal",水:"el-water"};
+
+let gender = "male", blood = "", capturedImage = null, stream = null;
+
+document.getElementById('f-month').addEventListener('change', updateDays);
+document.getElementById('f-year').addEventListener('change', updateDays);
+function updateDays() {
+  const y = parseInt(document.getElementById('f-year').value) || 2000;
+  const m = parseInt(document.getElementById('f-month').value) || 1;
+  const days = new Date(y, m, 0).getDate();
+  const cur = parseInt(document.getElementById('f-day').value);
+  const d = document.getElementById('f-day');
+  d.innerHTML = '<option value="">選択</option>';
+  for (let i = 1; i <= days; i++) {
+    const o = document.createElement('option');
+    o.value = o.textContent = i;
+    if (i === cur) o.selected = true;
+    d.appendChild(o);
   }
 }
+updateDays();
+
+function selGender(g) {
+  gender = g;
+  document.getElementById('g-male').classList.toggle('active', g === 'male');
+  document.getElementById('g-female').classList.toggle('active', g === 'female');
+}
+
+function selBlood(b) {
+  if (blood === b) { blood = ''; document.getElementById('bl-' + b).classList.remove('active'); return; }
+  if (blood) document.getElementById('bl-' + blood).classList.remove('active');
+  blood = b;
+  document.getElementById('bl-' + b).classList.add('active');
+}
+
+async function openCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    const v = document.getElementById('video-el');
+    v.srcObject = stream;
+    document.getElementById('cam-area').style.display = 'block';
+    document.getElementById('btn-open').style.display = 'none';
+    document.getElementById('btn-snap').style.display = '';
+    document.getElementById('face-preview').style.display = 'none';
+    document.getElementById('face-ok').style.display = 'none';
+    capturedImage = null;
+  } catch(e) {
+    alert('カメラへのアクセスが許可されていません。ブラウザの設定をご確認ください。');
+  }
+}
+
+function takePhoto() {
+  const v = document.getElementById('video-el');
+  const c = document.getElementById('canvas-el');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  capturedImage = c.toDataURL('image/jpeg', 0.8).split(',')[1];
+  const prev = document.getElementById('face-preview');
+  prev.src = 'data:image/jpeg;base64,' + capturedImage;
+  prev.style.display = 'block';
+  document.getElementById('cam-area').style.display = 'none';
+  document.getElementById('btn-snap').style.display = 'none';
+  document.getElementById('btn-retake').style.display = '';
+  document.getElementById('face-ok').style.display = 'block';
+  if (stream) stream.getTracks().forEach(t => t.stop());
+}
+
+function retake() {
+  capturedImage = null;
+  document.getElementById('face-preview').style.display = 'none';
+  document.getElementById('btn-retake').style.display = 'none';
+  document.getElementById('face-ok').style.display = 'none';
+  document.getElementById('btn-open').style.display = '';
+  openCamera();
+}
+
+function calcPillar(base) {
+  const kan = JIKKAN[((base % 10) + 10) % 10];
+  const shi = JUNISHI[((base % 12) + 12) % 12];
+  return { kan, shi, kanEl: JIKKAN_EL[JIKKAN.indexOf(kan)], shiEl: JUNISHI_EL[JUNISHI.indexOf(shi)] };
+}
+
+function getMeisei(year, month, day) {
+  const yb = (year - 4) % 60;
+  const mb = (yb * 12 + month + 1) % 60;
+  const dayDiff = Math.floor((new Date(year, month - 1, day) - new Date(1900, 0, 1)) / 86400000 + 15) % 60;
+  return [
+    { label: "年柱", ...calcPillar(yb) },
+    { label: "月柱", ...calcPillar(mb) },
+    { label: "日柱", ...calcPillar(dayDiff) },
+    { label: "時柱", kan: "?", shi: "?", kanEl: "", shiEl: "" }
+  ];
+}
+
+function renderPillars(pillars) {
+  const grid = document.getElementById('pillars-grid');
+  grid.innerHTML = '';
+  pillars.forEach(p => {
+    grid.innerHTML += `
+      <div class="pillar">
+        <div class="pillar-label">${p.label}</div>
+        <div class="pillar-kan">${p.kan}</div>
+        <div>${p.kanEl ? `<span class="el-tag ${EL_CLASS[p.kanEl]||''}">${p.kanEl}</span>` : ''}</div>
+        <hr class="pillar-divider">
+        <div class="pillar-chi">${p.shi}</div>
+        <div>${p.shiEl ? `<span class="el-tag ${EL_CLASS[p.shiEl]||''}">${p.shiEl}</span>` : ''}</div>
+      </div>`;
+  });
+  document.getElementById('pillars-area').style.display = 'block';
+}
+
+async function doFortune() {
+  const year = parseInt(document.getElementById('f-year').value);
+  const month = parseInt(document.getElementById('f-month').value);
+  const day = parseInt(document.getElementById('f-day').value);
+  const theme = document.getElementById('f-theme').value.trim();
+
+  if (!year || !month || !day || year < 1900 || year > 2010) {
+    alert('正しい生年月日を入力してください（1900〜2010年）');
+    return;
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '鑑定中...';
+
+  const pillars = getMeisei(year, month, day);
+  renderPillars(pillars);
+
+  const meiDesc = pillars.map(p =>
+    p.kan !== '?' ? `${p.label}：${p.kan}（${p.kanEl}）・${p.shi}（${p.shiEl}）` : `${p.label}：不明`
+  ).join('\n');
+
+  const prompt = `あなたは四柱推命・血液型・人相学を統合した占いの専門家です。以下のデータをもとに総合鑑定を行ってください。
+
+【生年月日】${year}年${month}月${day}日生まれ
+【性別】${gender === 'male' ? '男性' : '女性'}
+【血液型】${blood ? blood + '型' : '不明'}
+【命式】
+${meiDesc}
+【鑑定テーマ】${theme || '総合運（性格・仕事運・恋愛運・2026年の運勢）'}
+${capturedImage ? '【顔写真】添付の顔写真から人相を読み取り、鑑定に組み合わせてください。目・眉・口元・輪郭などの印象から読み取れる性格や運勢の傾向を含めてください。' : ''}
+
+以下を含めて700〜900字で鑑定結果を日本語で書いてください：
+1. 命式から読み取る基本的な性格・資質と五行バランス
+2. ${blood ? blood + '型の特性と命式の相関関係' : '五行の強み・弱み'}
+${capturedImage ? '3. 顔写真から読み取る人相の特徴と運勢への影響' : ''}
+${capturedImage ? '4' : '3'}. ${theme || '仕事・恋愛・金運の傾向と2026年（' + (2026 - year) + '歳）の運勢'}
+${capturedImage ? '5' : '4'}. 具体的なアドバイスと開運メッセージ
+
+温かく前向きで、具体的なメッセージになるよう心がけてください。`;
+
+  const resultCard = document.getElementById('result-card');
+  const resultText = document.getElementById('result-text');
+  resultCard.style.display = 'block';
+  resultText.innerHTML = '<div class="dots"><span></span><span></span><span></span></div>';
+
+  try {
+    // ★ Vercelにデプロイする場合は "/api/fortune" に変更してください
+    const apiUrl = "/api/fortune";
+
+    const res = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, capturedImage })
+    });
+    const data = await res.json();
+    const text = data.content?.find(b => b.type === 'text')?.text || '鑑定結果を取得できませんでした。';
+    resultText.textContent = text;
+  } catch(e) {
+    resultText.textContent = '接続エラーが発生しました。もう一度お試しください。';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'もう一度鑑定する';
+}
+</script>
+</body>
+</html>
