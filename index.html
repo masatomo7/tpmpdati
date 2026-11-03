@@ -155,7 +155,7 @@ if(stream)stream.getTracks().forEach(t=>t.stop());
 function retake(){capturedImage=null;document.getElementById('face-preview').style.display='none';document.getElementById('btn-retake').style.display='none';document.getElementById('face-ok').style.display='none';document.getElementById('btn-open').style.display='';openCamera();}
 function calcPillar(base){const kan=JIKKAN[((base%10)+10)%10];const shi=JUNISHI[((base%12)+12)%12];return{kan,shi,kanEl:JIKKAN_EL[JIKKAN.indexOf(kan)],shiEl:JUNISHI_EL[JUNISHI.indexOf(shi)]};}
 function getMeisei(year,month,day){
-const yb=(year-4)%60;const mb=(yb\*12+month+1)%60;
+const yb=(year-4)%60;const mb=(yb*12+month+1)%60;
 const dayDiff=Math.floor((new Date(year,month-1,day)-new Date(1900,0,1))/86400000+15)%60;
 return[{label:"年柱",...calcPillar(yb)},{label:"月柱",...calcPillar(mb)},{label:"日柱",...calcPillar(dayDiff)},{label:"時柱",kan:"?",shi:"?",kanEl:"",shiEl:""}];
 }
